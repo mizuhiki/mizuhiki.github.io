@@ -1,0 +1,109 @@
+<html>
+<head>
+<!-- <script type="text/javascript" src="WebMIDIAPIPolyfill.js"></script> -->
+<script type="text/javascript">
+    var midiAccess = null;
+    var midiInputs = null;
+    var midiOutputs = null;
+    
+    function setup() {
+        var messagelog = document.getElementById('messagelog');
+        if (window.navigator.requestMIDIAccess) {
+            window.navigator.requestMIDIAccess( { sysex : true } ).then( success, function() { messagelog.innerHTML += "requestMIDIAccess() failed.\n"; });
+        } else {
+            alert("Web MIDI API is not available.");
+            messagelog.innerHTML += "Web MIDI API is not available.\n";
+        }
+
+        function setupEventHandler() {
+            var iter = midiAccess.inputs.values();
+            inputs = [];
+            for (var o = iter.next(); !o.done; o = iter.next()) {
+                inputs.push(o.value);
+            }
+
+            for (var port = 0; port < inputs.length; port++) {
+                var str = "input port " + port + ", manufacturer: " + inputs[port].manufacturer + ", name: " + inputs[port].name;
+                var messagelog = document.getElementById('messagelog');
+                messagelog.innerHTML += str + "\n";
+
+                (function () {
+                    var _port = port;
+                    inputs[_port].onmidimessage = function (event) {
+                        var str = "port:" + _port + ", receivedTime:" + event.receivedTime.toFixed(2) + ", ";
+                        for (var i = 0; i < event.data.length; i++) {
+                            str += "0x" + event.data[i].toString(16) + " ";
+                        }
+                    
+                        var messagelog = document.getElementById('messagelog');
+                        messagelog.innerHTML += str + "\n";
+                        messagelog.scrollTop = messagelog.scrollHeight;
+                    };
+                }());
+            }
+
+            var iter = midiAccess.outputs.values();
+            outputs = [];
+            for (var o = iter.next(); !o.done; o = iter.next()) {
+                outputs.push(o.value);
+            }
+
+            midiInputs = inputs;
+            midiOutputs = outputs;
+        }
+
+        function success(access) {
+            midiAccess = access;
+
+            midiAccess.onstatechange = function (event) {
+                var str = "statechange: " + event.port.name + ", " + event.port.connection + ", " + event.port.type;
+                var messagelog = document.getElementById('messagelog');
+                messagelog.innerHTML += str + "\n";
+            }
+
+            setupEventHandler();
+        }
+    }
+
+    function noteOn() {
+        var iter = midiAccess.outputs.values();
+        for (var o = iter.next(); !o.done; o = iter.next()) {
+            o.value.send( [0x90, 60, 0x40] , window.performance.now() );
+        }
+    }
+
+    function noteOff() {
+        var iter = midiAccess.outputs.values();
+        for (var o = iter.next(); !o.done; o = iter.next()) {
+            o.value.send( [0x80, 60, 0x00] , window.performance.now() );
+        }
+    }
+
+    function sendSysEx() {
+        var iter = midiAccess.outputs.values();
+        for (var o = iter.next(); !o.done; o = iter.next()) {
+            o.value.send( [0xF0, 0x01, 0x02, 0x03, 0xF7] , window.performance.now() );
+        }
+    }
+
+    window.onload = function() {
+        setup();
+    }
+
+</script>
+</head>
+<body>
+<h1>Web MIDI API sample</h1>
+<!--
+<a href="javascript:setup();">[setup]</a>
+<a href="javascript:noteOn();">[note on]</a>
+<a href="javascript:noteOff();">[note off]</a>
+-->
+
+<a href="javascript:sendSysEx();">[send SysEx]</a>
+
+<h2>MIDI input monitor</h2>
+<a href="javascript:document.getElementById('messagelog').innerHTML = '';">[clear log]</a>
+<pre id="messagelog" style="width:100%; height:80%; overflow:auto; border:1px solid #aaaaaa;"></pre>
+</body>
+</html>
